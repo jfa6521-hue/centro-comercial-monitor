@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Centro Comercial — Monitor</title>
+
+<!-- Firebase SDK v10 (modular) -->
+<script type="module">
+  import { initializeApp }               from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getDatabase, ref, onValue }   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+  /* ══════════════════════════════════════════════════════
+   *  CONFIGURA AQUÍ tus credenciales de Firebase
+   *  (Consola Firebase → Configuración del proyecto → Tu app web)
+   * ══════════════════════════════════════════════════════ */
+  const firebaseConfig = {
+    apiKey:            "TU_API_KEY",
+    authDomain:        "TU_PROYECTO.firebaseapp.com",
+    databaseURL:       "https://TU_PROYECTO-default-rtdb.firebaseio.com",
+    projectId:         "TU_PROYECTO",
+    storageBucket:     "TU_PROYECTO.appspot.com",
+    messagingSenderId: "TU_SENDER_ID",
+    appId:             "TU_APP_ID"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db  = getDatabase(app);
+
+  /* Escucha en tiempo real el nodo /monitor */
+  onValue(ref(db, "/monitor"), (snapshot) => {
+    const d = snapshot.val();
+    if (!d) { showOffline(); return; }
+    updateUI(d);
+  }, (err) => {
+    console.error("Firebase error:", err);
+    showOffline();
+  });
+
+  function showOffline() {
+    document.getElementById("status-dot").className = "dot dot-red";
+    document.getElementById("status-text").textContent = "Sin datos";
+  }
+
+  function updateUI(d) {
+    /* Última actualización */
+    const ts = d.timestamp ? new Date(d.timestamp * 1000) : new Date();
+    document.getElementById("last-update").textContent =
+      ts.toLocaleTimeString("es-CO", {hour:"2-digit",minute:"2-digit",second:"2-digit"});
+
+    /* Dot de estado general */
+    const alive = (Date.now()/1000 - d.timestamp) < 30;  /* < 30 s = vivo */
+    document.getElementById("status-dot").className = alive ? "dot dot-green" : "dot dot-yellow";
+    document.getElementById("status-text").textContent = alive ? "En línea" : "Sin actualizar";
+
+    /* Internet */
+    setCard("internet-icon", "internet-label", "internet-val",
+      d.internet ? "wifi" : "wifi_off",
+      d.internet ? "ok" : "err",
+      d.internet ? "Conectado" : "Sin acceso",
+      d.internet ? "Acceso a Internet verificado" : "No hay Internet en el ESP32");
+
+    /* Dispositivos conectados al AP */
+    document.getElementById("ap-count").textContent = d.connected_ap ?? "—";
+
+    /* Temperatura */
+    document.getElementById("temp-val").textContent =
+      d.dht_ok ? d.temperature.toFixed(1) + " °C" : "Error sensor";
+    document.getElementById("temp-val").className =
+      d.dht_ok ? "metric-big" : "metric-big text-err";
+
+    /* Humedad */
+    document.getElementById("hum-val").textContent =
+      d.dht_ok ? d.humidity.toFixed(1) + " %" : "—";
+
+    /* Personas adentro */
+    document.getElementById("people-val").textContent = d.people_inside ?? 0;
+
+    /* NFC */
+    document.getElementById("nfc-total").textContent = d.nfc_total ?? 0;
+    document.getElementById("nfc-last").textContent  =
+      d.nfc_last_access ? fmtTs(d.nfc_last_access) : "—";
+  }
+
+  function setCard(iconId, labelId, valId, icon, cls, label, val) {
+    document.getElementById(iconId).textContent  = icon;
+    document.getElementById(labelId).textContent = label;
+    document.getElementById(valId).textContent   = val;
+    document.getElementById(iconId).className    = "mat-icon icon-" + cls;
+  }
+
+  function fmtTs(iso) {
+    try {
+      const d = new Date(iso);
+      return d.toLocaleTimeString("es-CO",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
+    } catch { return iso; }
+  }
+</script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+
+<style>
+  :root {
+    --bg:      #0b0f1a;
+    --panel:   #111827;
+    --border:  #1f2d45;
+    --accent:  #00e5ff;
+    --accent2: #64ffda;
+    --ok:      #00e676;
+    --warn:    #ffea00;
+    --err:     #ff1744;
+    --text:    #e2e8f0;
+    --muted:   #64748b;
+    --radius:  16px;
+    --shadow:  0 4px 30px rgba(0,229,255,.07);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    padding: 24px 16px 48px;
+    background-image:
+      radial-gradient(ellipse 800px 600px at 70% 0%, rgba(0,229,255,.06) 0%, transparent 70%),
+      radial-gradient(ellipse 600px 400px at 5% 80%, rgba(100,255,218,.04) 0%, transparent 70%);
+  }
+
+  /* ── Header ── */
+  header {
+    max-width: 1100px;
+    margin: 0 auto 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .logo-icon {
+    width: 44px; height: 44px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    display: grid;
+    place-items: center;
+    font-size: 22px;
+  }
+
+  h1 {
+    font-size: clamp(1.1rem, 3vw, 1.5rem);
+    font-weight: 800;
+    letter-spacing: -.02em;
+  }
+
+  h1 span { color: var(--accent); }
+
+  .subtitle {
+    font-family: 'Space Mono', monospace;
+    font-size: .7rem;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  /* Status pill */
+  .status-pill {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    padding: 6px 14px;
+    font-family: 'Space Mono', monospace;
+    font-size: .72rem;
+  }
+
+  .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+  }
+  .dot-green  { background: var(--ok);   box-shadow: 0 0 6px var(--ok); }
+  .dot-yellow { background: var(--warn); box-shadow: 0 0 6px var(--warn); }
+  .dot-red    { background: var(--err);  box-shadow: 0 0 6px var(--err); }
+
+  @keyframes pulse {
+    0%,100% { opacity:1; }
+    50%      { opacity:.5; }
+  }
+
+  /* ── Grid principal ── */
+  .grid {
+    max-width: 1100px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+  }
+
+  /* ── Card base ── */
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    box-shadow: var(--shadow);
+    transition: border-color .2s, transform .2s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(0,229,255,.03) 0%, transparent 60%);
+    pointer-events: none;
+  }
+
+  .card:hover {
+    border-color: rgba(0,229,255,.3);
+    transform: translateY(-2px);
+  }
+
+  .card-title {
+    font-size: .7rem;
+    font-family: 'Space Mono', monospace;
+    color: var(--muted);
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .card-title .mat-icon { font-size: 14px; }
+
+  /* ── Internet card ── */
+  .internet-card {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .mat-icon { font-family: 'Material Icons Round'; font-style: normal; }
+
+  .icon-ok  { color: var(--ok);   font-size: 48px !important; }
+  .icon-err { color: var(--err);  font-size: 48px !important; }
+
+  .internet-info { flex: 1; }
+  .internet-info .label {
+    font-size: 1.1rem;
+    font-weight: 700;
+  }
+  .internet-info .detail {
+    font-size: .8rem;
+    color: var(--muted);
+    margin-top: 4px;
+    font-family: 'Space Mono', monospace;
+  }
+
+  /* ── Metric grande ── */
+  .metric-big {
+    font-size: clamp(2.5rem, 8vw, 4rem);
+    font-weight: 800;
+    line-height: 1;
+    color: var(--accent);
+    letter-spacing: -.03em;
+  }
+
+  .metric-big.text-err { color: var(--err); font-size: 1.5rem; }
+
+  .metric-sub {
+    font-size: .8rem;
+    color: var(--muted);
+    margin-top: 8px;
+    font-family: 'Space Mono', monospace;
+  }
+
+  /* ── AP card ── */
+  .ap-bars {
+    display: flex;
+    gap: 6px;
+    margin-top: 16px;
+    align-items: flex-end;
+  }
+
+  .ap-bar {
+    flex: 1;
+    border-radius: 4px;
+    transition: background .4s, height .4s;
+    min-height: 8px;
+  }
+
+  /* ── NFC card ── */
+  .nfc-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+    font-family: 'Space Mono', monospace;
+    font-size: .8rem;
+  }
+
+  .nfc-row:last-child { border-bottom: none; }
+
+  .nfc-key  { color: var(--muted); }
+  .nfc-val  { color: var(--text); font-weight: 700; }
+
+  /* ── Footer ── */
+  footer {
+    text-align: center;
+    margin-top: 40px;
+    font-family: 'Space Mono', monospace;
+    font-size: .65rem;
+    color: var(--muted);
+  }
+
+  .refresh-note {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 4px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">🏬</div>
+    <div>
+      <h1>Centro <span>Comercial</span></h1>
+      <p class="subtitle">Sistema de Monitoreo — Campos y Ondas 2026-1</p>
+    </div>
+  </div>
+  <div class="status-pill">
+    <span class="dot dot-yellow" id="status-dot"></span>
+    <span id="status-text">Conectando…</span>
+    <span style="color:var(--muted)">·</span>
+    <span id="last-update" style="color:var(--muted)">--:--:--</span>
+  </div>
+</header>
+
+<div class="grid">
+
+  <!-- ── Internet ── -->
+  <div class="card" style="grid-column: span 2;">
+    <div class="card-title">
+      <span class="mat-icon" style="font-size:14px;color:var(--accent)">public</span>
+      Conectividad a Internet
+    </div>
+    <div class="internet-card">
+      <span class="mat-icon icon-ok" id="internet-icon">wifi</span>
+      <div class="internet-info">
+        <div class="label" id="internet-label">Verificando…</div>
+        <div class="detail" id="internet-val">—</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Dispositivos AP ── -->
+  <div class="card">
+    <div class="card-title">
+      <span class="mat-icon" style="font-size:14px;color:var(--accent)">devices</span>
+      Dispositivos en AP
+    </div>
+    <div class="metric-big" id="ap-count">—</div>
+    <div class="metric-sub">/ 4 máximo</div>
+
+    <!-- Barras visuales — se actualizan por JS -->
+    <div class="ap-bars" id="ap-bars">
+      <div class="ap-bar" id="bar0" style="height:32px;background:var(--border)"></div>
+      <div class="ap-bar" id="bar1" style="height:32px;background:var(--border)"></div>
+      <div class="ap-bar" id="bar2" style="height:32px;background:var(--border)"></div>
+      <div class="ap-bar" id="bar3" style="height:32px;background:var(--border)"></div>
+    </div>
+  </div>
+
+  <!-- ── Temperatura ── -->
+  <div class="card">
+    <div class="card-title">
+      <span class="mat-icon" style="font-size:14px;color:var(--accent)">thermostat</span>
+      Temperatura Ambiente
+    </div>
+    <div class="metric-big" id="temp-val">—</div>
+    <div class="metric-sub" id="hum-val">Humedad: — %</div>
+  </div>
+
+  <!-- ── Personas ── -->
+  <div class="card">
+    <div class="card-title">
+      <span class="mat-icon" style="font-size:14px;color:var(--accent)">groups</span>
+      Personas Adentro
+    </div>
+    <div class="metric-big" id="people-val" style="color:var(--accent2)">—</div>
+    <div class="metric-sub">Conteo por sensor IR</div>
+  </div>
+
+  <!-- ── NFC ── -->
+  <div class="card">
+    <div class="card-title">
+      <span class="mat-icon" style="font-size:14px;color:var(--accent)">contactless</span>
+      Control de Acceso NFC
+    </div>
+    <div class="nfc-row">
+      <span class="nfc-key">Accesos totales</span>
+      <span class="nfc-val" id="nfc-total">—</span>
+    </div>
+    <div class="nfc-row">
+      <span class="nfc-key">Último acceso</span>
+      <span class="nfc-val" id="nfc-last">—</span>
+    </div>
+    <div class="nfc-row">
+      <span class="nfc-key">Estado sistema</span>
+      <span class="nfc-val" style="color:var(--ok)">Activo</span>
+    </div>
+  </div>
+
+</div><!-- /grid -->
+
+<footer>
+  <div>Universidad del Quindío · Ingeniería Electrónica · Campos y Ondas 2026-1</div>
+  <div class="refresh-note">
+    <span class="mat-icon" style="font-size:12px">sync</span>
+    Actualización en tiempo real vía Firebase Realtime Database
+  </div>
+</footer>
+
+<!-- Script para las barras del AP (no-module para acceder al DOM fácilmente) -->
+<script>
+  /* Animación barras de AP — se llama desde el módulo a través de un evento custom */
+  document.addEventListener('ap-update', (e) => {
+    const n = e.detail;
+    for (let i = 0; i < 4; i++) {
+      const bar = document.getElementById('bar' + i);
+      if (i < n) {
+        bar.style.background = 'var(--accent)';
+        bar.style.height = (20 + i * 10) + 'px';
+        bar.style.boxShadow = '0 0 8px var(--accent)';
+      } else {
+        bar.style.background = 'var(--border)';
+        bar.style.height = '32px';
+        bar.style.boxShadow = 'none';
+      }
+    }
+  });
+
+  /* Parchear updateUI en el módulo para disparar el evento */
+  /* Nota: los módulos ES son privados, usamos MutationObserver en ap-count */
+  const observer = new MutationObserver(() => {
+    const val = parseInt(document.getElementById('ap-count').textContent) || 0;
+    document.dispatchEvent(new CustomEvent('ap-update', {detail: val}));
+  });
+  observer.observe(document.getElementById('ap-count'), {childList: true, subtree: true});
+</script>
+
+</body>
+</html>

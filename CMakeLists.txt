@@ -1,0 +1,20 @@
+idf_component_register(
+    SRCS
+        "main.c"
+        "wifi_manager.c"
+        "dht22.c"
+        "sensors.c"
+        "cloud_sync.c"
+    INCLUDE_DIRS "."
+    REQUIRES
+        esp_wifi
+        esp_event
+        esp_netif
+        esp_http_client
+        nvs_flash
+        driver
+        freertos
+        log
+        esp_timer
+        esp_sntp
+)
